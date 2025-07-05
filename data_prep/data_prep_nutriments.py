@@ -158,7 +158,7 @@ def get_nutriments(data):
         nutriments
         .group_by(main_information)
         .agg([
-            pl.col("value")
+            pl.col("100g")
             .filter(pl.col("name") == nutr)
             .first()
             .alias(nutr)
