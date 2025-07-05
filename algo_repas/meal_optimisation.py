@@ -56,6 +56,8 @@ if __name__ == "__main__":
     ).filter(
         pl.col("snacks") == False,
         pl.col("desserts") == False,
+        pl.col("drinks") == False,
+        pl.col("condiments") == False,
     )
 
     create_optimal_meals(user, products)

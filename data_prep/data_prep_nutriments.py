@@ -169,8 +169,9 @@ def get_nutriments(data):
 
     return products_names_with_macro_nutriments
 
-"""Supprime les caractères n'utilisant pas les caractères non latins"""
+
 def remove_non_latin(text: str) -> str:
+    """Supprime les caractères n'utilisant pas les caractères latins"""
     if text is None:
         return ""
     return ''.join(re.findall(r'[a-zA-ZÀ-ÿ0-9\s\-.,;:!?()\[\]{}]', text))
@@ -183,18 +184,17 @@ def clean_categories(data: pl.LazyFrame) -> pl.LazyFrame:
 
     cleaned_df = cleaned_df.with_columns(
         pl.col("labels")
-        .fill_null("")
         .str.to_lowercase()
         .str.replace_all(" ?, ?", ",")
         .str.replace_all(" ", "-")
-
+        .str.replace_all(",,", ",")
         .alias("labels"),
 
         pl.col("categories")
-        .fill_null("")
         .str.to_lowercase()
         .str.replace_all(" ?, ?", ",")
         .str.replace_all(" ", "-")
+        .str.replace_all(",,", ",")
         .alias("categories"),
     )
 
@@ -206,7 +206,18 @@ def clean_categories(data: pl.LazyFrame) -> pl.LazyFrame:
                                       return_dtype=pl.String).alias("labels")
     )
 
+    cleaned_df = cleaned_df.drop_nulls(["categories", "labels"]).filter(
+        pl.col("categories").str.len_chars() > 0,
+        pl.col("labels").str.len_chars() > 0,
+    )
+
+    # Produits inutiles à supprimer
+    cleaned_df = cleaned_df.filter(
+        pl.col("product_name").str.to_lowercase().str.contains("galettes? des rois") == False,
+    )
+
     return cleaned_df
+
 
 def add_tags(data: pl.LazyFrame) -> pl.LazyFrame:
     return data.with_columns(
@@ -222,20 +233,22 @@ def add_tags(data: pl.LazyFrame) -> pl.LazyFrame:
         # Tags catégories nourritures
         pl.col("categories").str.contains("viandes|meat").alias("meat"),
         pl.col("categories").str.contains("pates|pasta").alias("pasta"),
-        pl.col("categories").str.contains("boissons,|drinks").alias("drinks"),
+        pl.col("categories").str.contains("boissons,|drinks|lait").alias("drinks"),
         pl.col("categories").str.contains("produits-laitiers|lait|dairy").alias("lait"),
         pl.col("categories").str.contains("produits-de-la-mer|poisson|fish").alias("fish"),
-        pl.col("categories").str.contains("snacks|chips,").alias("snacks"),
-        pl.col("categories").str.contains("desserts|cakes").alias("desserts"),
+        pl.col("categories").str.contains("snacks|chips,|gressins").alias("snacks"),
+        pl.col("categories").str.contains("desserts|cakes|patisseries").alias("desserts"),
         pl.col("categories").str.contains("condiments|sauce|epices").alias("condiments"),
         pl.col("categories").str.contains("plats-prepares").alias("plats_prepares"),
-        pl.col("categories").str.contains("cereales-en-grains|cereales-et-pommes-de-terrre|feculents|pates").alias("feculents"),
+        pl.col("categories").str.contains("cereales-en-grains|cereales-et-pommes-de-terrre|feculents|pates").alias(
+            "feculents"),
         pl.col("categories").str.contains("pain|bread").alias("breads"),
+
     )
 
 
 if __name__ == "__main__":
-    df = download_data(True)
+    df = download_data()
 
     df = get_nutriments(df)
     df = clean_categories(df)
