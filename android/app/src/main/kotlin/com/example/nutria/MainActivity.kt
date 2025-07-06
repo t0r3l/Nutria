@@ -1,4 +1,4 @@
-package com.nutria.nutria
+package com.example.nutria
 
 import io.flutter.embedding.android.FlutterActivity
 
