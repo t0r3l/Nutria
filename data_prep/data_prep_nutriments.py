@@ -4,6 +4,11 @@ import re
 from unicodedata import normalize
 
 
+# TODO:
+#   - Solidifier la création des tags
+#   - Mettre en place une portion maximale pour les produits qui ne sont pas renseigné
+
+
 def download_data(force_download=False):
     # 1. Télécharger le Parquet
     print("Downloading data...")
@@ -151,7 +156,8 @@ def get_nutriments(data):
         "product_name",
         'categories',
         'nova_group',
-        'labels'
+        'labels',
+        'serving_size',
     ]
 
     products_names_with_macro_nutriments = (
@@ -188,6 +194,7 @@ def clean_categories(data: pl.LazyFrame) -> pl.LazyFrame:
         .str.replace_all(" ?, ?", ",")
         .str.replace_all(" ", "-")
         .str.replace_all(",,", ",")
+        .str.replace_all("undefined", "")
         .alias("labels"),
 
         pl.col("categories")
@@ -195,6 +202,7 @@ def clean_categories(data: pl.LazyFrame) -> pl.LazyFrame:
         .str.replace_all(" ?, ?", ",")
         .str.replace_all(" ", "-")
         .str.replace_all(",,", ",")
+        .str.replace_all("undefined", "")
         .alias("categories"),
     )
 
@@ -214,6 +222,7 @@ def clean_categories(data: pl.LazyFrame) -> pl.LazyFrame:
     # Produits inutiles à supprimer
     cleaned_df = cleaned_df.filter(
         pl.col("product_name").str.to_lowercase().str.contains("galettes? des rois") == False,
+        pl.col("product_name") != "Τραγανες μπουκιες"
     )
 
     return cleaned_df
@@ -222,13 +231,14 @@ def clean_categories(data: pl.LazyFrame) -> pl.LazyFrame:
 def add_tags(data: pl.LazyFrame) -> pl.LazyFrame:
     return data.with_columns(
         # Tags régimes alimentaires :
-        pl.col("labels").str.contains("halal").alias("halal"),
-        pl.col("labels").str.contains("vegan").alias("vegan"),
-        pl.col("labels").str.contains("bio").alias("bio"),
-        pl.col("labels").str.contains("vegetarian").alias("vegetarian"),
-        pl.col("labels").str.contains("gluten-free|sans-gluten|gluten-free|no-gluten").alias("gluten_free"),
-        pl.col("labels").str.contains("koscher|kascher|casher").alias("kascher"),
-        pl.col("labels").str.contains("sans-huile-de-palme|no-palm-oil").alias("no_palm_oil"),
+        # Pas utilisé pour l'instant
+        # pl.col("labels").str.contains("halal").alias("halal"),
+        # pl.col("labels").str.contains("vegan").alias("vegan"),
+        # pl.col("labels").str.contains("bio").alias("bio"),
+        # pl.col("labels").str.contains("vegetarian").alias("vegetarian"),
+        # pl.col("labels").str.contains("gluten-free|sans-gluten|gluten-free|no-gluten").alias("gluten_free"),
+        # pl.col("labels").str.contains("koscher|kascher|casher").alias("kascher"),
+        # pl.col("labels").str.contains("sans-huile-de-palme|no-palm-oil").alias("no_palm_oil"),
 
         # Tags catégories nourritures
         pl.col("categories").str.contains("viandes|meat").alias("meat"),
@@ -236,15 +246,50 @@ def add_tags(data: pl.LazyFrame) -> pl.LazyFrame:
         pl.col("categories").str.contains("boissons,|drinks|lait").alias("drinks"),
         pl.col("categories").str.contains("produits-laitiers|lait|dairy").alias("lait"),
         pl.col("categories").str.contains("produits-de-la-mer|poisson|fish").alias("fish"),
-        pl.col("categories").str.contains("snacks|chips,|gressins").alias("snacks"),
-        pl.col("categories").str.contains("desserts|cakes|patisseries").alias("desserts"),
+        pl.col("categories").str.contains("snack|chips,|gressins").alias("snacks"),
+        pl.col("categories").str.contains("desserts|cakes|patisseries|gateaux|snacks-sucres").alias("desserts"),
         pl.col("categories").str.contains("condiments|sauce|epices").alias("condiments"),
         pl.col("categories").str.contains("plats-prepares").alias("plats_prepares"),
         pl.col("categories").str.contains("cereales-en-grains|cereales-et-pommes-de-terrre|feculents|pates").alias(
             "feculents"),
         pl.col("categories").str.contains("pain|bread").alias("breads"),
-
+        pl.col("categories").str.contains("matieres-grasses").alias("matiere-grasses"),
+        pl.col("categories").str.contains("fruits,").alias("fruits"),
+        pl.col("categories").str.contains(",legumes,").alias("vegetables"),
+        pl.col("categories").str.contains("legumineu").alias("legumineux"),
+        pl.col("categories").str.contains("fromag").alias("cheese"),
+        pl.col("categories").str.contains("oeuf|egg").alias("eggs"),
+        pl.col("categories").str.contains("keto|complements").alias("complements"),
     )
+
+
+def portion_maximale(data: pl.LazyFrame) -> pl.LazyFrame:
+    data = data.with_columns(
+        pl.col("serving_size").str.extract(r"(\d+(?:[,.]\d+)?)\s*g(?:\s|$|\()")
+        .str.replace(",", ".")
+        .cast(pl.Float32)
+        .alias("serving_size"),
+    )
+
+    data = data.with_columns(
+        pl.when((pl.col("serving_size").is_not_null()) & (pl.col("serving_size") > 0))
+        .then(pl.col("serving_size")).otherwise(
+            pl.when(pl.col("meat") == True).then(100)
+            .when(pl.col("fish") == True).then(150)
+            .when(pl.col("eggs")).then(100)
+            .when(pl.col("vegetables")==True).then(100)
+            .when(pl.col("feculents")==True).then(200)
+            .when(pl.col("legumineux") == True).then(100)
+            .when(pl.col("lait")==True).then(125)
+            .when(pl.col("cheese")==True).then(30)
+            .when((pl.col("fruits")==True) & (pl.col("drinks")==False)).then(150)
+            .when(pl.col("matiere-grasses")==True).then(10)
+            .when(pl.col("desserts")==True).then(60)
+            .otherwise(100)
+        ).alias("portion_maximale")
+    )
+
+    return data
 
 
 if __name__ == "__main__":
@@ -253,6 +298,7 @@ if __name__ == "__main__":
     df = get_nutriments(df)
     df = clean_categories(df)
     df = add_tags(df)
+    df = portion_maximale(df)
 
     df = df.collect()
 
