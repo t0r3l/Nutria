@@ -28,6 +28,8 @@ class Target:
         self.glucides_cal = 0.45 * tdee
         self.glucides_g = self.glucides_cal / 4
 
+        self.fibers = 30
+
 
 class User:
     def __init__(self, name, gender, age, height, weight_in_kg, activity_level: str, objectif: str,
@@ -55,10 +57,12 @@ class User:
         self.tdee = self.bmr * self.activity_multiplier + self.objectif_calories
         self.target = Target(self.tdee, self.lean_body_mass_in_kg)
 
+
     def get_target(self) -> np.ndarray:
         return np.array([
             self.tdee,
             self.target.protein_cal,
             self.target.lipid_g,
-            self.target.glucides_g
+            self.target.glucides_g,
+            self.target.fibers
         ])

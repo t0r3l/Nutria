@@ -16,7 +16,7 @@ def create_optimal_meals(user: User, products: pl.DataFrame, solveur = "nnls"):
     """
     targets = user.get_target() *0.3
 
-    nutr_cols = ["energy-kcal","proteins", "fat", "carbohydrates"]
+    nutr_cols = ["energy-kcal","proteins", "fat", "carbohydrates", "fiber"]
     arr = products.select(nutr_cols).to_numpy() / 100.0
     M = arr.T
 
@@ -98,7 +98,7 @@ def create_optimal_meals(user: User, products: pl.DataFrame, solveur = "nnls"):
 
     # Création du DataFrame de vérification
     check = pl.DataFrame({
-        "nutriment": ["energy-kcal", "proteins", "fat", "carbohydrates"],
+        "nutriment": ["energy-kcal", "proteins", "fat", "carbohydrates", "fiber"],
         "obtenu_g": obtained,
         "cible_g": targets
     })

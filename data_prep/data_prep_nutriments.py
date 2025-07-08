@@ -222,7 +222,16 @@ def clean_categories(data: pl.LazyFrame) -> pl.LazyFrame:
     # Produits inutiles à supprimer
     cleaned_df = cleaned_df.filter(
         pl.col("product_name").str.to_lowercase().str.contains("galettes? des rois") == False,
-        ~(pl.col("product_name").is_in(["Τραγανες μπουκιες", "KitKat soufflé"]))
+        ~(pl.col("product_name").is_in(
+            [
+                "Τραγανες μπουκιες",
+                "KitKat soufflé",
+                "Pourdre de protéines",
+                "Erbsenprotein",
+                "Schnitzel auf Erbsenproteinbasis",
+                "Pap de queijo",
+            ])),
+        ~(pl.col("product_name").str.to_lowercase().str.contains("bébé|bebe"))
     )
 
     return cleaned_df
@@ -243,7 +252,10 @@ def add_tags(data: pl.LazyFrame) -> pl.LazyFrame:
         # Tags catégories nourritures
         pl.col("categories").str.contains("viandes|meat").alias("meat"),
         pl.col("categories").str.contains("pates|pasta").alias("pasta"),
-        pl.col("categories").str.contains("boissons,|drinks|lait|infusion|thes?,|teas").alias("drinks"),
+        (
+            pl.col("categories").str.contains("boissons,|drinks?|lait|infusion|thes?,|teas") |
+            pl.col("product_name").str.to_lowercase().str.contains(" drinks? |café|coffee")
+        ).alias("drinks"),
         pl.col("categories").str.contains("produits-laitiers|lait|dairy").alias("lait"),
         pl.col("categories").str.contains("produits-de-la-mer|poisson|fish").alias("fish"),
         pl.col("categories").str.contains("snack|chips,|gressins|bonbon|chocoloat").alias("snacks"),
@@ -259,7 +271,8 @@ def add_tags(data: pl.LazyFrame) -> pl.LazyFrame:
         pl.col("categories").str.contains("legumineu").alias("legumineux"),
         pl.col("categories").str.contains("fromag").alias("cheese"),
         pl.col("categories").str.contains("oeuf|egg").alias("eggs"),
-        pl.col("categories").str.contains("keto|complements|supplements").alias("complements"),
+        (pl.col("categories").str.contains("keto|complements|supplements|whey|protein-powder|proteine") | pl.col(
+            "product_name").str.contains("whey|Whey|WHEY")).alias("complements"),
     )
 
 
@@ -277,14 +290,14 @@ def portion_maximale(data: pl.LazyFrame) -> pl.LazyFrame:
             pl.when(pl.col("meat") == True).then(100)
             .when(pl.col("fish") == True).then(150)
             .when(pl.col("eggs")).then(100)
-            .when(pl.col("vegetables")==True).then(100)
-            .when(pl.col("feculents")==True).then(200)
+            .when(pl.col("vegetables") == True).then(100)
+            .when(pl.col("feculents") == True).then(200)
             .when(pl.col("legumineux") == True).then(100)
-            .when(pl.col("lait")==True).then(125)
-            .when(pl.col("cheese")==True).then(30)
-            .when((pl.col("fruits")==True) & (pl.col("drinks")==False)).then(150)
-            .when(pl.col("matiere-grasses")==True).then(10)
-            .when(pl.col("desserts")==True).then(60)
+            .when(pl.col("lait") == True).then(125)
+            .when(pl.col("cheese") == True).then(30)
+            .when((pl.col("fruits") == True) & (pl.col("drinks") == False)).then(150)
+            .when(pl.col("matiere-grasses") == True).then(10)
+            .when(pl.col("desserts") == True).then(60)
             .otherwise(100)
         ).alias("portion_maximale")
     )
