@@ -22,7 +22,6 @@ def create_optimal_meals(user: User, products: pl.DataFrame, solveur = "nnls"):
 
     print("M shape:", M.shape)
     print("targets shape:", targets.shape)
-    print("N:", N)
 
     lwr_bound = np.zeros(M.shape[1])
     higher_bound = products["portion_maximale"].to_numpy()
@@ -35,6 +34,15 @@ def create_optimal_meals(user: User, products: pl.DataFrame, solveur = "nnls"):
         # NNLS : Pas de portion max donc repas trop riche en 1 élément
         # ou parfois plusieurs ingrédients du meme type (2 huiles différentes)
         x, _ = nnls(M, targets)
+
+        plan_data = {
+            "product_name": products["product_name"].to_list(),
+            "quantité_g": x
+        }
+
+        obtained = M @ x
+
+
     elif solveur == "lsq":
         #   Lsq_Linear : Utilise tous les aliments de la base, ne fait pas de choix sur les produits (moins d'10g de produit)
         x = lsq_linear(
@@ -44,17 +52,51 @@ def create_optimal_meals(user: User, products: pl.DataFrame, solveur = "nnls"):
             method="bvls",
         ).x
 
+        plan_data = {
+            "product_name": products["product_name"].to_list(),
+            "quantité_g": x
+        }
+
+        obtained = M @ x
+
+
+    elif solveur == "hybride":
+
+        x_init, _ = nnls(M, targets)
+        masque_x = x_init > 0
+
+        indices_conserves = np.where(masque_x)[0]
+
+        M_filtre = M[:, masque_x]
+        products_filtre = products.filter(pl.Series(range(len(products))).is_in(indices_conserves))
+
+
+        lwr_bound_filtre = np.zeros(M_filtre.shape[1])
+        uppr_bound_filtre = products_filtre["portion_maximale"].to_numpy()
+
+        x = lsq_linear(
+            M_filtre,
+            targets,
+            bounds=(lwr_bound_filtre, uppr_bound_filtre),
+            method="bvls",
+        ).x
+
+        plan_data = {
+            "product_name": products_filtre["product_name"].to_list(),
+            "quantité_g": x
+        }
+        obtained = M_filtre @ x
+
+
     else :
         raise ValueError("Solveur inconnu")
 
-    # 5. Formatage du plan en polars
-    plan = pl.DataFrame({
-        "product_name": products["product_name"].to_list(),
-        "quantité_g": x
-    }).filter(pl.col("quantité_g") > 1e-6).sort("quantité_g", descending=True)
+    print("x shape:", x.shape)
 
-    # 6. Calcul des apports obtenus pour vérifier
-    obtained = M @ x
+    # Création du DataFrame avec les données appropriées
+    plan = pl.DataFrame(plan_data).filter(pl.col("quantité_g") > 1e-6).sort("quantité_g", descending=True)
+
+    # Création du DataFrame de vérification
     check = pl.DataFrame({
         "nutriment": ["energy-kcal", "proteins", "fat", "carbohydrates"],
         "obtenu_g": obtained,
@@ -66,6 +108,10 @@ def create_optimal_meals(user: User, products: pl.DataFrame, solveur = "nnls"):
     print("\nVérif. apports :")
     print(check)
 
+
+def subset_produits(user: User, products: pl.DataFrame, solveur = "nnls"):
+    subset = products.sample(10_000)
+    create_optimal_meals(user, subset, solveur)
 
 if __name__ == "__main__":
     user = User(
@@ -92,4 +138,4 @@ if __name__ == "__main__":
         pl.col("complements") == False
     )
 
-    create_optimal_meals(user, products, "ortools")
+    subset_produits(user, products, "hybride")

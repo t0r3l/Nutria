@@ -222,7 +222,7 @@ def clean_categories(data: pl.LazyFrame) -> pl.LazyFrame:
     # Produits inutiles à supprimer
     cleaned_df = cleaned_df.filter(
         pl.col("product_name").str.to_lowercase().str.contains("galettes? des rois") == False,
-        pl.col("product_name") != "Τραγανες μπουκιες"
+        ~(pl.col("product_name").is_in(["Τραγανες μπουκιες", "KitKat soufflé"]))
     )
 
     return cleaned_df
@@ -243,10 +243,10 @@ def add_tags(data: pl.LazyFrame) -> pl.LazyFrame:
         # Tags catégories nourritures
         pl.col("categories").str.contains("viandes|meat").alias("meat"),
         pl.col("categories").str.contains("pates|pasta").alias("pasta"),
-        pl.col("categories").str.contains("boissons,|drinks|lait").alias("drinks"),
+        pl.col("categories").str.contains("boissons,|drinks|lait|infusion|thes?,|teas").alias("drinks"),
         pl.col("categories").str.contains("produits-laitiers|lait|dairy").alias("lait"),
         pl.col("categories").str.contains("produits-de-la-mer|poisson|fish").alias("fish"),
-        pl.col("categories").str.contains("snack|chips,|gressins").alias("snacks"),
+        pl.col("categories").str.contains("snack|chips,|gressins|bonbon|chocoloat").alias("snacks"),
         pl.col("categories").str.contains("desserts|cakes|patisseries|gateaux|snacks-sucres").alias("desserts"),
         pl.col("categories").str.contains("condiments|sauce|epices").alias("condiments"),
         pl.col("categories").str.contains("plats-prepares").alias("plats_prepares"),
@@ -259,7 +259,7 @@ def add_tags(data: pl.LazyFrame) -> pl.LazyFrame:
         pl.col("categories").str.contains("legumineu").alias("legumineux"),
         pl.col("categories").str.contains("fromag").alias("cheese"),
         pl.col("categories").str.contains("oeuf|egg").alias("eggs"),
-        pl.col("categories").str.contains("keto|complements").alias("complements"),
+        pl.col("categories").str.contains("keto|complements|supplements").alias("complements"),
     )
 
 
