@@ -204,7 +204,7 @@ def clean_categories(data: pl.LazyFrame) -> pl.LazyFrame:
         .str.replace_all(",,", ",")
         .str.replace_all("undefined", "")
         .alias("categories"),
-    )
+        )
 
     # Supprimer les accents :
     cleaned_df = cleaned_df.with_columns(
@@ -217,7 +217,7 @@ def clean_categories(data: pl.LazyFrame) -> pl.LazyFrame:
     cleaned_df = cleaned_df.drop_nulls(["categories", "labels"]).filter(
         pl.col("categories").str.len_chars() > 0,
         pl.col("labels").str.len_chars() > 0,
-    )
+        )
 
     # Produits inutiles à supprimer
     cleaned_df = cleaned_df.filter(
@@ -253,8 +253,8 @@ def add_tags(data: pl.LazyFrame) -> pl.LazyFrame:
         pl.col("categories").str.contains("viandes|meat").alias("meat"),
         pl.col("categories").str.contains("pates|pasta").alias("pasta"),
         (
-            pl.col("categories").str.contains("boissons,|drinks?|lait|infusion|thes?,|teas") |
-            pl.col("product_name").str.to_lowercase().str.contains(" drinks? |café|coffee")
+                pl.col("categories").str.contains("boissons,|drinks?|lait|infusion|thes?,|teas") |
+                pl.col("product_name").str.to_lowercase().str.contains(" drinks? |café|coffee")
         ).alias("drinks"),
         pl.col("categories").str.contains("produits-laitiers|lait|dairy").alias("lait"),
         pl.col("categories").str.contains("produits-de-la-mer|poisson|fish").alias("fish"),
@@ -282,7 +282,7 @@ def portion_maximale(data: pl.LazyFrame) -> pl.LazyFrame:
         .str.replace(",", ".")
         .cast(pl.Float32)
         .alias("serving_size"),
-    )
+        )
 
     data = data.with_columns(
         pl.when((pl.col("serving_size").is_not_null()) & (pl.col("serving_size") > 0))
