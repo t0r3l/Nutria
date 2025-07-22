@@ -230,8 +230,13 @@ def clean_categories(data: pl.LazyFrame) -> pl.LazyFrame:
                 "Erbsenprotein",
                 "Schnitzel auf Erbsenproteinbasis",
                 "Pap de queijo",
+                "Gluten",
+                "Gluten pur",
+                "Inulin Pulver",
+
             ])),
-        ~(pl.col("product_name").str.to_lowercase().str.contains("bébé|bebe"))
+        ~(pl.col("product_name").str.to_lowercase().str.contains("gelatin|gélatine|powder|poudre|bcaa|bébé|bebe|Iso 100")),
+
     )
 
     return cleaned_df
@@ -240,21 +245,21 @@ def clean_categories(data: pl.LazyFrame) -> pl.LazyFrame:
 def add_tags(data: pl.LazyFrame) -> pl.LazyFrame:
     return data.with_columns(
         # Tags régimes alimentaires :
-        # Pas utilisé pour l'instant
-        # pl.col("labels").str.contains("halal").alias("halal"),
-        # pl.col("labels").str.contains("vegan").alias("vegan"),
-        # pl.col("labels").str.contains("bio").alias("bio"),
-        # pl.col("labels").str.contains("vegetarian").alias("vegetarian"),
-        # pl.col("labels").str.contains("gluten-free|sans-gluten|gluten-free|no-gluten").alias("gluten_free"),
-        # pl.col("labels").str.contains("koscher|kascher|casher").alias("kascher"),
-        # pl.col("labels").str.contains("sans-huile-de-palme|no-palm-oil").alias("no_palm_oil"),
+
+        pl.col("labels").str.contains("halal").alias("halal"),
+        pl.col("labels").str.contains("vegan").alias("vegan"),
+        pl.col("labels").str.contains("bio").alias("bio"),
+        pl.col("labels").str.contains("vegetarian").alias("vegetarian"),
+        pl.col("labels").str.contains("gluten-free|sans-gluten|gluten-free|no-gluten").alias("gluten_free"),
+        pl.col("labels").str.contains("koscher|kascher|casher").alias("kascher"),
+        pl.col("labels").str.contains("sans-huile-de-palme|no-palm-oil").alias("no_palm_oil"),
 
         # Tags catégories nourritures
         pl.col("categories").str.contains("viandes|meat").alias("meat"),
         pl.col("categories").str.contains("pates|pasta").alias("pasta"),
         (
-            pl.col("categories").str.contains("boissons,|drinks?|lait|infusion|thes?,|teas") |
-            pl.col("product_name").str.to_lowercase().str.contains(" drinks? |café|coffee")
+                pl.col("categories").str.contains("boissons?,|drinks?|lait|infusion|thes?,|teas|beverage") |
+                pl.col("product_name").str.to_lowercase().str.contains(" drinks? |café|coffee")
         ).alias("drinks"),
         pl.col("categories").str.contains("produits-laitiers|lait|dairy").alias("lait"),
         pl.col("categories").str.contains("produits-de-la-mer|poisson|fish").alias("fish"),
@@ -265,13 +270,17 @@ def add_tags(data: pl.LazyFrame) -> pl.LazyFrame:
         pl.col("categories").str.contains("cereales-en-grains|cereales-et-pommes-de-terrre|feculents|pates").alias(
             "feculents"),
         pl.col("categories").str.contains("pain|bread").alias("breads"),
-        pl.col("categories").str.contains("matieres-grasses").alias("matiere-grasses"),
+        (
+                pl.col("categories").str.contains("matieres-grasses|huile") |
+                pl.col("product_name").str.contains("Huile")
+        ).alias("matiere-grasses"),
         pl.col("categories").str.contains("fruits,").alias("fruits"),
         pl.col("categories").str.contains(",legumes,").alias("vegetables"),
         pl.col("categories").str.contains("legumineu").alias("legumineux"),
         pl.col("categories").str.contains("fromag").alias("cheese"),
         pl.col("categories").str.contains("oeuf|egg").alias("eggs"),
-        (pl.col("categories").str.contains("keto|complements|supplements|whey|protein-powder|proteine") | pl.col(
+        (pl.col("categories").str.contains(
+            "keto|complements|supplements|whey|protein-powder|proteine|additif|edulcorant|additives|sweetener|bodybuilder|protein") | pl.col(
             "product_name").str.contains("whey|Whey|WHEY")).alias("complements"),
     )
 
@@ -299,7 +308,8 @@ def portion_maximale(data: pl.LazyFrame) -> pl.LazyFrame:
             .when(pl.col("matiere-grasses") == True).then(10)
             .when(pl.col("desserts") == True).then(60)
             .otherwise(100)
-        ).alias("portion_maximale")
+        ).alias("portion_maximale"),
+        pl.when((pl.col("vegetables") == True) ).then(100).otherwise(0).alias("portion_legumes"),
     )
 
     return data

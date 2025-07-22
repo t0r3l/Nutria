@@ -1,7 +1,10 @@
+from operator import contains
+
 import numpy as np
 import polars as pl
 from scipy.optimize import nnls, lsq_linear
 from algo_repas.targets import User
+
 
 # TODO:
 #   - Permettre de forcer la présence d'un aliment dans le repas
@@ -10,13 +13,14 @@ from algo_repas.targets import User
 #   - Ajouter de la diversité dans les repas créés
 
 
-def create_optimal_meals(user: User, products: pl.DataFrame, solveur = "nnls"):
+def create_optimal_meals(user: User, products: pl.DataFrame, solveur="nnls"):
     """
     Permet de calculer un repas selon les cibles de l'utilisateur et les produits disponibles.
     """
-    targets = user.get_target() *0.3
+    targets = user.get_target() * 0.3
+    targets = np.concatenate((targets, [100.0]))
 
-    nutr_cols = ["energy-kcal","proteins", "fat", "carbohydrates", "fiber"]
+    nutr_cols = ["energy-kcal", "proteins", "fat", "carbohydrates", "fiber", "portion_legumes"]
     arr = products.select(nutr_cols).to_numpy() / 100.0
     M = arr.T
 
@@ -26,7 +30,7 @@ def create_optimal_meals(user: User, products: pl.DataFrame, solveur = "nnls"):
     lwr_bound = np.zeros(M.shape[1])
     higher_bound = products["portion_maximale"].to_numpy()
 
-    print("lwr:",lwr_bound.shape)
+    print("lwr:", lwr_bound.shape)
     print("highr:", higher_bound.shape)
 
     # Appel solveur
@@ -70,7 +74,6 @@ def create_optimal_meals(user: User, products: pl.DataFrame, solveur = "nnls"):
         M_filtre = M[:, masque_x]
         products_filtre = products.filter(pl.Series(range(len(products))).is_in(indices_conserves))
 
-
         lwr_bound_filtre = np.zeros(M_filtre.shape[1])
         uppr_bound_filtre = products_filtre["portion_maximale"].to_numpy()
 
@@ -83,24 +86,27 @@ def create_optimal_meals(user: User, products: pl.DataFrame, solveur = "nnls"):
 
         plan_data = {
             "product_name": products_filtre["product_name"].to_list(),
-            "quantité_g": x
+            "quantité_g": x,
+
         }
         obtained = M_filtre @ x
 
 
-    else :
+    else:
         raise ValueError("Solveur inconnu")
 
     print("x shape:", x.shape)
 
     # Création du DataFrame avec les données appropriées
-    plan = pl.DataFrame(plan_data).filter(pl.col("quantité_g") > 1e-6).sort("quantité_g", descending=True)
+    plan = pl.DataFrame(plan_data).filter(pl.col("quantité_g") > 5).sort("quantité_g", descending=True)
 
     # Création du DataFrame de vérification
     check = pl.DataFrame({
-        "nutriment": ["energy-kcal", "proteins", "fat", "carbohydrates", "fiber"],
+        "nutriment": nutr_cols,
         "obtenu_g": obtained,
-        "cible_g": targets
+        "cible_g": targets,
+        "écart_g": obtained - targets,
+        "écart_%": 100 * (obtained - targets) / targets
     })
 
     print("Plan optimisé :")
@@ -109,9 +115,32 @@ def create_optimal_meals(user: User, products: pl.DataFrame, solveur = "nnls"):
     print(check)
 
 
-def subset_produits(user: User, products: pl.DataFrame, solveur = "nnls"):
+def subset_produits(user: User, products: pl.DataFrame, solveur="nnls"):
     subset = products.sample(10_000)
     create_optimal_meals(user, subset, solveur)
+
+
+def apply_categories(products: pl.DataFrame, categories: list, regime: str):
+    filtered_products = products
+
+    match regime:
+        case "Vegan":
+            filtered_products = products.filter(pl.col("vegan") == True)
+        case "Vegetarian":
+            filtered_products = products.filter(pl.col("vegetarian") == True | (pl.col("meat") == False))
+        case "Halal":
+            filtered_products = products.filter(pl.col("halal") == True | (pl.col("vegetarian") == True))
+        case "Casher":
+            filtered_products = products.filter(pl.col("casher") == True)
+
+    if contains(categories, "Sans Gluten"):
+        filtered_products = filtered_products.filter(pl.col("gluten_free") == True)
+
+    if contains(categories, "Bio"):
+        filtered_products = filtered_products.filter(pl.col("bio") == True)
+
+    return filtered_products
+
 
 if __name__ == "__main__":
     user = User(
