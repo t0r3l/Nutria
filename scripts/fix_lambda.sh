@@ -1,3 +1,16 @@
+#!/bin/bash
+# final_lambda_fix.sh - Fix API Gateway integration and calculation bug
+
+set -e
+
+echo "🔧 Final Lambda fix - API Gateway + Calculation bug..."
+
+LAMBDA_NAME="nutria-compute-targets-adcd61bb0cdcd880"
+
+# Step 1: Create corrected Lambda function
+echo "📝 Creating corrected Lambda function..."
+
+cat > lambda_functions/targets/lambda_function.py << 'EOF'
 import json
 import logging
 
@@ -181,8 +194,111 @@ def computeTargets(event, context):
             'headers': {'Content-Type': 'application/json'},
             'body': json.dumps({'error': str(e)})
         }
+EOF
 
-# AWS Lambda handler function (alias for computeTargets)
-def lambda_handler(event, context):
-    """AWS Lambda entry point"""
-    return computeTargets(event, context)
+echo "✅ Created corrected Lambda function"
+
+# Step 2: Update Lambda function
+echo ""
+echo "🔄 Updating Lambda function..."
+
+cd lambda_functions/targets
+zip -r ../../lambda_update.zip . -q
+cd ../..
+
+aws lambda update-function-code \
+    --function-name "$LAMBDA_NAME" \
+    --zip-file fileb://lambda_update.zip \
+    --region eu-west-1 > /dev/null
+
+echo "Waiting for function update..."
+aws lambda wait function-updated --function-name "$LAMBDA_NAME" --region eu-west-1
+
+echo "✅ Function updated"
+
+# Step 3: Test corrected function
+echo ""
+echo "🧪 Testing corrected function..."
+
+# Test direct invocation
+echo "Direct invocation test:"
+echo '{"gender":"male","age":30,"height":175,"weight_in_kg":70,"activity_level":"moderate","objectif":"weight loss"}' > test.json
+
+aws lambda invoke \
+    --function-name "$LAMBDA_NAME" \
+    --payload file://test.json \
+    --region eu-west-1 \
+    --cli-binary-format raw-in-base64-out \
+    response.json
+
+echo "Direct response:"
+DIRECT_RESPONSE=$(cat response.json)
+echo "$DIRECT_RESPONSE" | jq . 2>/dev/null || echo "$DIRECT_RESPONSE"
+
+# Extract key values for verification
+TDEE=$(echo "$DIRECT_RESPONSE" | jq -r '.body' | jq -r '.calculations.tdee' 2>/dev/null || echo "unknown")
+BMR=$(echo "$DIRECT_RESPONSE" | jq -r '.body' | jq -r '.calculations.bmr' 2>/dev/null || echo "unknown")
+
+echo ""
+echo "📊 Key values:"
+echo "   BMR: $BMR calories"
+echo "   TDEE: $TDEE calories"
+
+# Step 4: Test API Gateway
+echo ""
+echo "🌐 Testing API Gateway..."
+
+API_RESPONSE=$(curl -s -X POST "https://7968q3waxk.execute-api.eu-west-1.amazonaws.com/dev/targets" \
+  -H "Content-Type: application/json" \
+  -d @test.json)
+
+echo "API Gateway response:"
+echo "$API_RESPONSE" | jq . 2>/dev/null || echo "$API_RESPONSE"
+
+# Step 5: Verify results
+echo ""
+echo "🎯 Verification:"
+
+if echo "$DIRECT_RESPONSE" | jq -e '.body' | jq -e '.calculations.tdee' > /dev/null 2>&1; then
+    DIRECT_TDEE=$(echo "$DIRECT_RESPONSE" | jq -r '.body' | jq -r '.calculations.tdee')
+    if (( $(echo "$DIRECT_TDEE > 0" | bc -l) )); then
+        echo "✅ Direct invocation: Working (TDEE: $DIRECT_TDEE)"
+    else
+        echo "❌ Direct invocation: TDEE calculation still wrong"
+    fi
+else
+    echo "❌ Direct invocation: Failed"
+fi
+
+if echo "$API_RESPONSE" | jq -e '.calculations.tdee' > /dev/null 2>&1; then
+    API_TDEE=$(echo "$API_RESPONSE" | jq -r '.calculations.tdee')
+    echo "✅ API Gateway: Working (TDEE: $API_TDEE)"
+elif echo "$API_RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
+    echo "❌ API Gateway: Still has error"
+    echo "   Error: $(echo "$API_RESPONSE" | jq -r '.error')"
+else
+    echo "❌ API Gateway: Unexpected response format"
+fi
+
+# Step 6: Test with target array extraction
+echo ""
+echo "🎯 Testing target array extraction..."
+
+if echo "$API_RESPONSE" | jq -e '.target_array' > /dev/null 2>&1; then
+    TARGET_ARRAY=$(echo "$API_RESPONSE" | jq -c '.target_array')
+    echo "✅ Target array extracted: $TARGET_ARRAY"
+    echo ""
+    echo "🍽️  Ready for meal optimization!"
+    echo "You can now use this target array with the Fargate optimizer:"
+    echo "curl -X POST 'https://7968q3waxk.execute-api.eu-west-1.amazonaws.com/dev/optimize' \\"
+    echo "  -H 'Content-Type: application/json' \\"
+    echo "  -d '{\"user\":{\"target_array\":$TARGET_ARRAY},\"solveur\":\"hybride\"}'"
+else
+    echo "❌ Could not extract target array"
+fi
+
+# Cleanup
+rm -f test.json response.json lambda_update.zip
+
+echo ""
+echo "🎉 Lambda fix completed!"

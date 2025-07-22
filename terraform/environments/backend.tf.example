@@ -1,0 +1,11 @@
+# Backend configuration example
+# Copy this file to each environment directory and update the key
+terraform {
+  backend "s3" {
+    bucket         = "nutria-terraform-state"
+    key            = "environments/dev/terraform.tfstate"  # Change for each environment
+    region         = "eu-west-1"
+    encrypt        = true
+    dynamodb_table = "nutria-terraform-locks"
+  }
+}
