@@ -68,7 +68,6 @@ class _ProfilePageState extends State<ProfilePage> {
     final poidsActuel = double.tryParse(_poidsCtrl.text) ?? 0.0;
     historiquePoids.add({'date': now, 'poids': poidsActuel});
 
-    // Utilisation des mêmes clefs que loadSignup et backend
     final userData = {
       'nom': _nomCtrl.text.trim(),
       'prenom': _prenomCtrl.text.trim(),
@@ -111,6 +110,12 @@ class _ProfilePageState extends State<ProfilePage> {
     });
   }
 
+  void _deleteEntry(int index) async {
+    historiquePoids.removeAt(index);
+    await UserStorage.saveWeightHistory(historiquePoids);
+    setState(() {});
+  }
+
   @override
   void dispose() {
     _nomCtrl.dispose();
@@ -140,7 +145,6 @@ class _ProfilePageState extends State<ProfilePage> {
                     child: TextFormField(
                       controller: _nomCtrl,
                       decoration: const InputDecoration(labelText: 'Nom'),
-                      keyboardType: TextInputType.text,
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -148,7 +152,6 @@ class _ProfilePageState extends State<ProfilePage> {
                     child: TextFormField(
                       controller: _prenomCtrl,
                       decoration: const InputDecoration(labelText: 'Prénom'),
-                      keyboardType: TextInputType.text,
                     ),
                   ),
                 ],
@@ -167,14 +170,11 @@ class _ProfilePageState extends State<ProfilePage> {
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       value: sexe,
+                      decoration: const InputDecoration(labelText: 'Sexe'),
                       items: sexes
-                          .map((s) => DropdownMenuItem(
-                        value: s,
-                        child: Text(s),
-                      ))
+                          .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                           .toList(),
                       onChanged: (val) => setState(() => sexe = val!),
-                      decoration: const InputDecoration(labelText: 'Sexe'),
                     ),
                   ),
                 ],
@@ -183,7 +183,8 @@ class _ProfilePageState extends State<ProfilePage> {
               TextFormField(
                 controller: _poidsCtrl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Poids actuel (kg)'),
+                decoration:
+                const InputDecoration(labelText: 'Poids actuel (kg)'),
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -194,26 +195,21 @@ class _ProfilePageState extends State<ProfilePage> {
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 value: activityLevel,
+                decoration:
+                const InputDecoration(labelText: 'Niveau d’activité'),
                 items: activityLevels
-                    .map((lvl) => DropdownMenuItem(
-                  value: lvl,
-                  child: Text(lvl),
-                ))
+                    .map((lvl) => DropdownMenuItem(value: lvl, child: Text(lvl)))
                     .toList(),
                 onChanged: (val) => setState(() => activityLevel = val!),
-                decoration: const InputDecoration(labelText: 'Niveau d’activité'),
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 value: objectif,
+                decoration: const InputDecoration(labelText: 'Objectif'),
                 items: objectifs
-                    .map((obj) => DropdownMenuItem(
-                  value: obj,
-                  child: Text(obj),
-                ))
+                    .map((obj) => DropdownMenuItem(value: obj, child: Text(obj)))
                     .toList(),
                 onChanged: (val) => setState(() => objectif = val!),
-                decoration: const InputDecoration(labelText: 'Objectif'),
               ),
               const SizedBox(height: 20),
               Center(
@@ -230,17 +226,33 @@ class _ProfilePageState extends State<ProfilePage> {
                 const Text('Historique des poids',
                     style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
-                Column(
-                  children: historiquePoids.reversed
-                      .map(
-                        (e) => ListTile(
-                      leading: const Icon(Icons.monitor_weight),
-                      title: Text('${e['poids']} kg'),
-                      subtitle: Text('Date : ${e['date']}'),
-                    ),
-                  )
-                      .toList(),
-                )
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: historiquePoids.length,
+                  itemBuilder: (context, index) {
+                    final entry = historiquePoids.reversed.toList()[index];
+                    return Dismissible(
+                      key: ValueKey(entry['date']),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        color: Colors.red,
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 20),
+                        child: const Icon(Icons.delete, color: Colors.white),
+                      ),
+                      onDismissed: (_) {
+                        final actualIndex = historiquePoids.length - 1 - index;
+                        _deleteEntry(actualIndex);
+                      },
+                      child: ListTile(
+                        leading: const Icon(Icons.monitor_weight),
+                        title: Text('${entry['poids']} kg'),
+                        subtitle: Text('Date : ${entry['date']}'),
+                      ),
+                    );
+                  },
+                ),
               ]
             ],
           ),
@@ -248,4 +260,10 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
     );
   }
+}
+
+void _deleteEntry(int index) async {
+  final history = await UserStorage.loadWeightHistory() ?? [];
+  history.removeAt(index);
+  await UserStorage.saveWeightHistory(history);
 }

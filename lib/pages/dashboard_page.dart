@@ -2,11 +2,11 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-
-import 'profile_page.dart';
-import 'preferences_page.dart';
 import 'package:nutria_project/pages/services/api_service.dart';
 import 'package:nutria_project/pages/services/user_storage.dart';
+import 'composer_meal_page.dart';
+import 'profile_page.dart';
+import 'preferences_page.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -18,7 +18,6 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   List<Map<String, dynamic>> weightHistory = [];
   List<dynamic> userTargets = [];
-  bool isLoading = false;
 
   @override
   void initState() {
@@ -33,19 +32,13 @@ class _DashboardPageState extends State<DashboardPage> {
     final lastProfileKey = await UserStorage.loadLastProfileKey();
 
     if (profile == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Profil incomplet. Veuillez le remplir.")),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Profil incomplet. Veuillez le remplir.")));
       return;
     }
 
     final profileKey = jsonEncode(profile);
-
     if (profileKey != lastProfileKey || savedTargets == null || savedTargets.isEmpty) {
-      debugPrint("📋 Profil modifié → recalcul des targets");
-
       final profileForBackend = {
         'gender': profile['gender'] as String,
         'age': int.tryParse(profile['age']?.toString() ?? '') ?? 0,
@@ -54,58 +47,42 @@ class _DashboardPageState extends State<DashboardPage> {
         'activity_level': profile['activity_level'] as String,
         'objectif': profile['objectif'] as String,
       };
-
       try {
         final response = await ApiService.fetchTargets(profileForBackend);
         final rawList = response['target_array'];
         if (rawList is! List) throw Exception("Réponse API invalide : pas de target_array");
-        final List<dynamic> targets = rawList.map((e) => (e as num).toDouble()).toList();
-
+        final targets = rawList.map((e) => (e as num).toDouble()).toList();
         await UserStorage.saveTargets(targets);
         await UserStorage.saveLastProfileKey(profileKey);
-        setState(() {
-          userTargets = targets;
-        });
+        setState(() => userTargets = targets);
       } catch (e) {
-        debugPrint("❌ Erreur lors de la récupération des targets: $e");
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Erreur targets: \$e')),
-          );
-        }
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erreur targets: \$e')));
       }
     } else {
-      debugPrint("✅ Profil inchangé → on utilise les targets locaux");
-      setState(() {
-        userTargets = savedTargets;
-      });
+      setState(() => userTargets = savedTargets);
     }
-
-    setState(() {
-      weightHistory = history ?? [];
-    });
+    setState(() => weightHistory = history ?? []);
   }
 
-  Widget _buildTargetCard(String label, String value) {
-    return Expanded(
-      child: Card(
-        margin: const EdgeInsets.all(8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        elevation: 3,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Text(value, style: const TextStyle(fontSize: 16)),
-            ],
-          ),
+  Widget _buildTargetCard(String label, String value) => Expanded(
+    child: Card(
+      margin: const EdgeInsets.all(8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 3,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(value, style: const TextStyle(fontSize: 16)),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -120,20 +97,30 @@ class _DashboardPageState extends State<DashboardPage> {
         actions: [
           PopupMenuButton<String>(
             onSelected: (value) {
-              if (value == 'Profil') {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ProfilePage()),
-                ).then((_) => _loadData());
-              } else if (value == 'Préférences') {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const PreferencesPage()),
-                );
+              switch (value) {
+                case 'Profil':
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ProfilePage()),
+                  ).then((_) => _loadData());
+                  break;
+                case 'Composer':
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ComposerMealPage()),
+                  );
+                  break;
+                case 'Préférences':
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PreferencesPage()),
+                  );
+                  break;
               }
             },
             itemBuilder: (context) => [
               const PopupMenuItem(value: 'Profil', child: Text('Profil')),
+              const PopupMenuItem(value: 'Composer', child: Text('Composer un repas')),
               const PopupMenuItem(value: 'Préférences', child: Text('Préférences')),
             ],
           ),
@@ -177,28 +164,45 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Builder(builder: (_) {
-                    final dailyCal = (userTargets[0] as num).toDouble();
-                    final protGrams = (userTargets[1] as num).toDouble();
-                    final lipGrams = (userTargets[2] as num).toDouble();
-                    final carbsGrams = (userTargets[3] as num).toDouble();
-                    return Column(
-                      children: [
-                        Row(
-                          children: [
-                            _buildTargetCard('Calories', '${dailyCal.toStringAsFixed(0)} kcal'),
-                            _buildTargetCard('Protéines', '${protGrams.toStringAsFixed(1)} g'),
-                          ],
+                  Column(
+                    children: [
+                      Row(
+                        children: [
+                          _buildTargetCard('Calories', '${(userTargets[0] as num).toStringAsFixed(0)} kcal'),
+                          _buildTargetCard('Protéines', '${(userTargets[1] as num).toStringAsFixed(1)} g'),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          _buildTargetCard('Lipides', '${(userTargets[2] as num).toStringAsFixed(1)} g'),
+                          _buildTargetCard('Glucides', '${(userTargets[3] as num).toStringAsFixed(1)} g'),
+                        ],
+                      ),
+                    ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 4,
+                      ),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const ComposerMealPage()),
+                        );
+                      },
+                      child: const Center(
+                        child: Text(
+                          '🍽️ Composer un repas',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
-                        Row(
-                          children: [
-                            _buildTargetCard('Lipides', '${lipGrams.toStringAsFixed(1)} g'),
-                            _buildTargetCard('Glucides', '${carbsGrams.toStringAsFixed(1)} g'),
-                          ],
-                        ),
-                      ],
-                    );
-                  }),
+                      ),
+                    ),
+                  ),
                   if (weeklyCaloriesTarget != null) ...[
                     const SizedBox(height: 10),
                     Center(
@@ -239,16 +243,14 @@ class _DashboardPageState extends State<DashboardPage> {
                               spots: weightHistory
                                   .asMap()
                                   .entries
-                                  .map(
-                                    (e) => FlSpot(
-                                  e.key.toDouble(),
-                                  double.tryParse(
-                                    e.value['poids']?.toString() ??
-                                        e.value['weight']?.toString() ??
-                                        '0.0',
-                                  ) ?? 0.0,
-                                ),
-                              )
+                                  .map((e) => FlSpot(
+                                e.key.toDouble(),
+                                double.tryParse(
+                                  e.value['poids']?.toString() ??
+                                      e.value['weight']?.toString() ??
+                                      '0.0',
+                                ) ?? 0.0,
+                              ))
                                   .toList(),
                               isCurved: true,
                               barWidth: 3,
