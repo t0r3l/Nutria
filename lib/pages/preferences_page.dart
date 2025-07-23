@@ -10,8 +10,11 @@ class PreferencesPage extends StatefulWidget {
 
 class _PreferencesPageState extends State<PreferencesPage> {
   String? regime;
+  int petitDejPourcent = 25;
+  int dejPourcent = 40;
+  int dinerPourcent = 35;
+  bool isLoading = true;
 
-  /// Régimes conformes à ceux attendus par le backend
   final Map<String, String> regimes = {
     'vegan': 'Vegan',
     'vegetarian': 'Végétarien',
@@ -19,10 +22,8 @@ class _PreferencesPageState extends State<PreferencesPage> {
     'kosher': 'Casher',
     'gluten-free': 'Sans gluten',
     'organic': 'Bio',
-    'sans régime':'Sans Régime'
+    'sans régime': 'Sans Régime'
   };
-
-  bool isLoading = true;
 
   @override
   void initState() {
@@ -35,23 +36,47 @@ class _PreferencesPageState extends State<PreferencesPage> {
     if (data != null) {
       setState(() {
         regime = data['regime'];
+        final split = data['calorie_split'] ?? {};
+        petitDejPourcent = split['petit_dejeuner'] ?? 25;
+        dejPourcent = split['dejeuner'] ?? 40;
+        dinerPourcent = split['diner'] ?? 35;
         isLoading = false;
       });
     } else {
-      setState(() {
-        regime = regimes.keys.first;
-        isLoading = false;
-      });
+      regime = regimes.keys.first;
+      isLoading = false;
     }
   }
 
   Future<void> _savePreferences() async {
+    final total = petitDejPourcent + dejPourcent + dinerPourcent;
+    if (total != 100) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('La somme doit faire 100%')),
+      );
+      return;
+    }
+
     await UserStorage.savePreferences({
       'regime': regime,
+      'calorie_split': {
+        'petit_dejeuner': petitDejPourcent,
+        'dejeuner': dejPourcent,
+        'diner': dinerPourcent,
+      }
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Préférences mises à jour')),
+    );
+  }
+
+  Widget buildPourcentageField(String label, int value, Function(int) onChanged) {
+    return TextFormField(
+      initialValue: value.toString(),
+      keyboardType: TextInputType.number,
+      decoration: InputDecoration(labelText: '$label (%)'),
+      onChanged: (val) => onChanged(int.tryParse(val) ?? 0),
     );
   }
 
@@ -78,11 +103,18 @@ class _PreferencesPageState extends State<PreferencesPage> {
               onChanged: (val) => setState(() => regime = val),
             ),
             const SizedBox(height: 30),
+            const Text('Répartition des calories (somme = 100%)', style: TextStyle(fontWeight: FontWeight.bold)),
 
+            buildPourcentageField('Petit-déjeuner', petitDejPourcent,
+                    (val) => setState(() => petitDejPourcent = val)),
+            buildPourcentageField('Déjeuner', dejPourcent,
+                    (val) => setState(() => dejPourcent = val)),
+            buildPourcentageField('Dîner', dinerPourcent,
+                    (val) => setState(() => dinerPourcent = val)),
+
+            const SizedBox(height: 30),
             ElevatedButton(
-              onPressed: () async {
-                await _savePreferences();
-              },
+              onPressed: _savePreferences,
               child: const Text('Enregistrer'),
             ),
           ],
