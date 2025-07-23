@@ -66,15 +66,15 @@ class _ProfilePageState extends State<ProfilePage> {
 
     final now = DateTime.now().toIso8601String().substring(0, 10);
     final poidsActuel = double.tryParse(_poidsCtrl.text) ?? 0.0;
-
     historiquePoids.add({'date': now, 'poids': poidsActuel});
 
+    // Utilisation des mêmes clefs que loadSignup et backend
     final userData = {
       'nom': _nomCtrl.text.trim(),
       'prenom': _prenomCtrl.text.trim(),
       'age': int.tryParse(_ageCtrl.text) ?? 0,
-      'taille': int.tryParse(_tailleCtrl.text) ?? 0,
-      'poids': poidsActuel,
+      'height': int.tryParse(_tailleCtrl.text) ?? 0,
+      'weight_in_kg': poidsActuel,
       'gender': sexe,
       'activity_level': activityLevel,
       'objectif': objectif,
@@ -86,8 +86,8 @@ class _ProfilePageState extends State<ProfilePage> {
     final profileForBackend = {
       'gender': userData['gender'],
       'age': userData['age'],
-      'height': userData['taille'],
-      'weight_in_kg': userData['poids'],
+      'height': userData['height'],
+      'weight_in_kg': userData['weight_in_kg'],
       'activity_level': userData['activity_level'],
       'objectif': userData['objectif'],
     };
@@ -102,7 +102,7 @@ class _ProfilePageState extends State<ProfilePage> {
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur lors du calcul des targets: $e')),
+        SnackBar(content: Text('Erreur lors du calcul des targets: \$e')),
       );
     }
 
@@ -183,8 +183,7 @@ class _ProfilePageState extends State<ProfilePage> {
               TextFormField(
                 controller: _poidsCtrl,
                 keyboardType: TextInputType.number,
-                decoration:
-                const InputDecoration(labelText: 'Poids actuel (kg)'),
+                decoration: const InputDecoration(labelText: 'Poids actuel (kg)'),
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -202,8 +201,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 ))
                     .toList(),
                 onChanged: (val) => setState(() => activityLevel = val!),
-                decoration:
-                const InputDecoration(labelText: 'Niveau d’activité'),
+                decoration: const InputDecoration(labelText: 'Niveau d’activité'),
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
@@ -233,13 +231,15 @@ class _ProfilePageState extends State<ProfilePage> {
                     style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
                 Column(
-                  children: historiquePoids.reversed.map((e) {
-                    return ListTile(
+                  children: historiquePoids.reversed
+                      .map(
+                        (e) => ListTile(
+                      leading: const Icon(Icons.monitor_weight),
                       title: Text('${e['poids']} kg'),
                       subtitle: Text('Date : ${e['date']}'),
-                      leading: const Icon(Icons.monitor_weight),
-                    );
-                  }).toList(),
+                    ),
+                  )
+                      .toList(),
                 )
               ]
             ],

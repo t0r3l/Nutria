@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 import 'profile_page.dart';
-import 'composer_meal_page.dart';
 import 'preferences_page.dart';
 import 'package:nutria_project/pages/services/api_service.dart';
 import 'package:nutria_project/pages/services/user_storage.dart';
@@ -19,8 +18,7 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   List<Map<String, dynamic>> weightHistory = [];
   List<dynamic> userTargets = [];
-  Map<String, dynamic>? mealPlan;
-  bool isLoadingMeal = false;
+  bool isLoading = false;
 
   @override
   void initState() {
@@ -29,10 +27,10 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _loadData() async {
-    final history         = await UserStorage.loadWeightHistory();
-    final profile         = await UserStorage.loadSignup();
-    final savedTargets    = await UserStorage.loadTargets();
-    final lastProfileKey  = await UserStorage.loadLastProfileKey();
+    final history = await UserStorage.loadWeightHistory();
+    final profile = await UserStorage.loadSignup();
+    final savedTargets = await UserStorage.loadTargets();
+    final lastProfileKey = await UserStorage.loadLastProfileKey();
 
     if (profile == null) {
       if (mounted) {
@@ -48,30 +46,21 @@ class _DashboardPageState extends State<DashboardPage> {
     if (profileKey != lastProfileKey || savedTargets == null || savedTargets.isEmpty) {
       debugPrint("📋 Profil modifié → recalcul des targets");
 
-      // On prépare le payload correctement typé
       final profileForBackend = {
-        'gender':         profile['gender'] as String,
-        'age':            int.tryParse(profile['age']?.toString() ?? '') ?? 0,
-        'height':         int.tryParse(profile['height']?.toString() ?? '') ?? 0,
-        'weight_in_kg':   double.tryParse(profile['weight_in_kg']?.toString() ?? '') ?? 0.0,
+        'gender': profile['gender'] as String,
+        'age': int.tryParse(profile['age']?.toString() ?? '') ?? 0,
+        'height': int.tryParse(profile['height']?.toString() ?? '') ?? 0,
+        'weight_in_kg': double.tryParse(profile['weight_in_kg']?.toString() ?? '') ?? 0.0,
         'activity_level': profile['activity_level'] as String,
-        'objectif':       profile['objectif'] as String,
+        'objectif': profile['objectif'] as String,
       };
 
       try {
-        // 1) On récupère la Map complète
         final response = await ApiService.fetchTargets(profileForBackend);
-
-        // 2) On en extrait la liste target_array
         final rawList = response['target_array'];
-        if (rawList is! List) {
-          throw Exception("Réponse API invalide : pas de target_array");
-        }
-        final List<dynamic> targets = rawList
-            .map((e) => (e as num).toDouble())
-            .toList();
+        if (rawList is! List) throw Exception("Réponse API invalide : pas de target_array");
+        final List<dynamic> targets = rawList.map((e) => (e as num).toDouble()).toList();
 
-        // 3) On sauvegarde et on met à jour l'état
         await UserStorage.saveTargets(targets);
         await UserStorage.saveLastProfileKey(profileKey);
         setState(() {
@@ -81,7 +70,7 @@ class _DashboardPageState extends State<DashboardPage> {
         debugPrint("❌ Erreur lors de la récupération des targets: $e");
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Erreur targets: $e')),
+            SnackBar(content: Text('Erreur targets: \$e')),
           );
         }
       }
@@ -95,28 +84,6 @@ class _DashboardPageState extends State<DashboardPage> {
     setState(() {
       weightHistory = history ?? [];
     });
-  }
-
-  Future<void> _optimizeMeal() async {
-    setState(() {
-      isLoadingMeal = true;
-      mealPlan = null;
-    });
-
-    try {
-      final res = await ApiService.optimizeMeal(targets: userTargets);
-      setState(() {
-        mealPlan = res;
-        isLoadingMeal = false;
-      });
-    } catch (e) {
-      setState(() => isLoadingMeal = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur optimisation: $e')),
-        );
-      }
-    }
   }
 
   Widget _buildTargetCard(String label, String value) {
@@ -158,11 +125,6 @@ class _DashboardPageState extends State<DashboardPage> {
                   context,
                   MaterialPageRoute(builder: (_) => const ProfilePage()),
                 ).then((_) => _loadData());
-              } else if (value == 'Composer') {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ComposerMealPage()),
-                );
               } else if (value == 'Préférences') {
                 Navigator.push(
                   context,
@@ -172,7 +134,6 @@ class _DashboardPageState extends State<DashboardPage> {
             },
             itemBuilder: (context) => [
               const PopupMenuItem(value: 'Profil', child: Text('Profil')),
-              const PopupMenuItem(value: 'Composer', child: Text('Composer un repas')),
               const PopupMenuItem(value: 'Préférences', child: Text('Préférences')),
             ],
           ),
@@ -209,13 +170,17 @@ class _DashboardPageState extends State<DashboardPage> {
                 if (userTargets.isNotEmpty) ...[
                   const Text(
                     '🎯 Objectifs (par jour)',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Builder(builder: (_) {
-                    final dailyCal   = (userTargets[0] as num).toDouble();
-                    final protGrams  = (userTargets[1] as num).toDouble();
-                    final lipGrams   = (userTargets[2] as num).toDouble();
+                    final dailyCal = (userTargets[0] as num).toDouble();
+                    final protGrams = (userTargets[1] as num).toDouble();
+                    final lipGrams = (userTargets[2] as num).toDouble();
                     final carbsGrams = (userTargets[3] as num).toDouble();
                     return Column(
                       children: [
@@ -243,38 +208,9 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 10),
-                  ElevatedButton.icon(
-                    onPressed: isLoadingMeal ? null : _optimizeMeal,
-                    icon: const Icon(Icons.restaurant),
-                    label: Text(isLoadingMeal
-                        ? 'Optimisation en cours...'
-                        : '🍽️ Optimiser le repas'),
-                  ),
-                  if (isLoadingMeal)
-                    const Padding(
-                      padding: EdgeInsets.all(8.0),
-                      child: Center(child: CircularProgressIndicator()),
-                    ),
-                ],
-
-                if (mealPlan != null) ...[
                   const SizedBox(height: 20),
-                  const Text(
-                    '🍲 Meal Plan',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
-                  ),
-                  const SizedBox(height: 8),
-                  Card(
-                    elevation: 3,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(mealPlan.toString()),
-                    ),
-                  ),
                 ],
 
-                const SizedBox(height: 20),
                 const Text(
                   '📈 Suivi hebdomadaire (poids)',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
