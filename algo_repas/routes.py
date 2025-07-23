@@ -49,13 +49,11 @@ def apply_categories(products: pl.DataFrame, regime: str):
     return filtered_products
 
 def create_optimal_meals_hybrid(user_targets, products_df, solveur="hybride", meal_fraction=0.3, portion_legumes=100,
-                                categories=None, regime:str= ""):
+                                 regime:str= ""):
     """Hybrid meal optimization method"""
-    if categories is None:
-        categories = []
     try:
 
-        products_df = apply_categories(products_df, categories, regime)
+        products_df = apply_categories(products_df, regime)
         logger.info(f"Starting optimization with solver: {solveur}")
 
         # Apply meal fraction to targets
@@ -228,7 +226,6 @@ def optimize_meal():
         sample_size = data.get('sample_size', 1000)
         target_legumes = data.get('target_legumes', 100)
         regime = data.get('regime', "")
-        categories = data.get('categories', [])
 
         logger.info(f"Request params: fraction={meal_fraction}, solver={solveur}, sample={sample_size}, legumes={target_legumes}")
 
@@ -261,7 +258,7 @@ def optimize_meal():
 
         # Run optimization
         meal_plan, verification = create_optimal_meals_hybrid(
-            user_data['target_array'], products_df, solveur, meal_fraction, target_legumes
+            user_data['target_array'], products_df, solveur, meal_fraction, target_legumes, regime
         )
 
         response_data = {
