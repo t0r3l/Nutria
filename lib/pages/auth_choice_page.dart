@@ -13,7 +13,7 @@ class AuthChoicePage extends StatelessWidget {
         children: [
           /// Image de fond
           Image.asset(
-            'assets/images/ChatGPT Image 8 juil. 2025, 23_37_32.png',
+            'assets/images/17.png',
             fit: BoxFit.cover,
           ),
 

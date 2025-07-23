@@ -1,13 +1,150 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
+
 import 'profile_page.dart';
 import 'composer_meal_page.dart';
 import 'preferences_page.dart';
+import 'package:nutria_project/pages/services/api_service.dart';
+import 'package:nutria_project/pages/services/user_storage.dart';
 
-class DashboardPage extends StatelessWidget {
+class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
   @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
+  List<Map<String, dynamic>> weightHistory = [];
+  List<dynamic> userTargets = [];
+  Map<String, dynamic>? mealPlan;
+  bool isLoadingMeal = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final history         = await UserStorage.loadWeightHistory();
+    final profile         = await UserStorage.loadSignup();
+    final savedTargets    = await UserStorage.loadTargets();
+    final lastProfileKey  = await UserStorage.loadLastProfileKey();
+
+    if (profile == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Profil incomplet. Veuillez le remplir.")),
+        );
+      }
+      return;
+    }
+
+    final profileKey = jsonEncode(profile);
+
+    if (profileKey != lastProfileKey || savedTargets == null || savedTargets.isEmpty) {
+      debugPrint("📋 Profil modifié → recalcul des targets");
+
+      // On prépare le payload correctement typé
+      final profileForBackend = {
+        'gender':         profile['gender'] as String,
+        'age':            int.tryParse(profile['age']?.toString() ?? '') ?? 0,
+        'height':         int.tryParse(profile['height']?.toString() ?? '') ?? 0,
+        'weight_in_kg':   double.tryParse(profile['weight_in_kg']?.toString() ?? '') ?? 0.0,
+        'activity_level': profile['activity_level'] as String,
+        'objectif':       profile['objectif'] as String,
+      };
+
+      try {
+        // 1) On récupère la Map complète
+        final response = await ApiService.fetchTargets(profileForBackend);
+
+        // 2) On en extrait la liste target_array
+        final rawList = response['target_array'];
+        if (rawList is! List) {
+          throw Exception("Réponse API invalide : pas de target_array");
+        }
+        final List<dynamic> targets = rawList
+            .map((e) => (e as num).toDouble())
+            .toList();
+
+        // 3) On sauvegarde et on met à jour l'état
+        await UserStorage.saveTargets(targets);
+        await UserStorage.saveLastProfileKey(profileKey);
+        setState(() {
+          userTargets = targets;
+        });
+      } catch (e) {
+        debugPrint("❌ Erreur lors de la récupération des targets: $e");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erreur targets: $e')),
+          );
+        }
+      }
+    } else {
+      debugPrint("✅ Profil inchangé → on utilise les targets locaux");
+      setState(() {
+        userTargets = savedTargets;
+      });
+    }
+
+    setState(() {
+      weightHistory = history ?? [];
+    });
+  }
+
+  Future<void> _optimizeMeal() async {
+    setState(() {
+      isLoadingMeal = true;
+      mealPlan = null;
+    });
+
+    try {
+      final res = await ApiService.optimizeMeal(targets: userTargets);
+      setState(() {
+        mealPlan = res;
+        isLoadingMeal = false;
+      });
+    } catch (e) {
+      setState(() => isLoadingMeal = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur optimisation: $e')),
+        );
+      }
+    }
+  }
+
+  Widget _buildTargetCard(String label, String value) {
+    return Expanded(
+      child: Card(
+        margin: const EdgeInsets.all(8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 3,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text(value, style: const TextStyle(fontSize: 16)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final weeklyCaloriesTarget =
+    userTargets.isNotEmpty ? (userTargets[0] as num) * 7 : null;
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -20,7 +157,7 @@ class DashboardPage extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const ProfilePage()),
-                );
+                ).then((_) => _loadData());
               } else if (value == 'Composer') {
                 Navigator.push(
                   context,
@@ -34,18 +171,9 @@ class DashboardPage extends StatelessWidget {
               }
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'Profil',
-                child: Text('Profil'),
-              ),
-              const PopupMenuItem(
-                value: 'Composer',
-                child: Text('Composer un repas'),
-              ),
-              const PopupMenuItem(
-                value: 'Préférences',
-                child: Text('Préférences'),
-              ),
+              const PopupMenuItem(value: 'Profil', child: Text('Profil')),
+              const PopupMenuItem(value: 'Composer', child: Text('Composer un repas')),
+              const PopupMenuItem(value: 'Préférences', child: Text('Préférences')),
             ],
           ),
         ],
@@ -53,21 +181,13 @@ class DashboardPage extends StatelessWidget {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          /// Fond d’écran
-          Image.asset(
-            'assets/images/16.png',
-            fit: BoxFit.cover,
-          ),
-
-          /// Contenu
+          Image.asset('assets/images/16.png', fit: BoxFit.cover),
           SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: kToolbarHeight + 20),
-
-                /// Logo en haut
                 Center(
                   child: Image.asset(
                     'assets/images/ChatGPT Image 8 juil. 2025, 23_37_30.png',
@@ -75,149 +195,141 @@ class DashboardPage extends StatelessWidget {
                     height: 100,
                   ),
                 ),
-
                 const SizedBox(height: 5),
-
-                /// Image décorative avant stats
                 Center(
                   child: Image.asset(
-                    'assets/images/25.png',
+                    'assets/images/22.png',
                     width: double.infinity,
                     height: 200,
                     fit: BoxFit.cover,
                   ),
                 ),
-
                 const SizedBox(height: 20),
 
-                /// Bouton Composer juste après la bannière
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      backgroundColor: const Color(0xFF1F1F23), // anthracite
-                    ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const ComposerMealPage()),
-                      );
-                    },
-                    icon: const Icon(Icons.restaurant,
-                        size: 20, color: Colors.white),
-                    label: const Text(
-                      '🍽️ Composer un repas',
-                      style: TextStyle(fontSize: 16, color: Colors.white),
-                    ),
+                if (userTargets.isNotEmpty) ...[
+                  const Text(
+                    '🎯 Objectifs (par jour)',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
                   ),
-                ),
-
-                const SizedBox(height: 20),
-
-                /// Statistiques du jour
-                const Text(
-                  'Statistiques du jour',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Card(
-                  elevation: 3,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
+                  const SizedBox(height: 8),
+                  Builder(builder: (_) {
+                    final dailyCal   = (userTargets[0] as num).toDouble();
+                    final protGrams  = (userTargets[1] as num).toDouble();
+                    final lipGrams   = (userTargets[2] as num).toDouble();
+                    final carbsGrams = (userTargets[3] as num).toDouble();
+                    return Column(
                       children: [
-                        const Text('Calories : 1200 / 2000 kcal'),
-                        const SizedBox(height: 8),
-                        LinearProgressIndicator(
-                          value: 1200 / 2000,
-                          minHeight: 12,
-                          backgroundColor: Colors.grey[300],
-                          color: Colors.green,
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          children: const [
-                            Chip(label: Text('P: 80g')),
-                            Chip(label: Text('L: 50g')),
-                            Chip(label: Text('G: 200g')),
+                        Row(
+                          children: [
+                            _buildTargetCard('Calories', '${dailyCal.toStringAsFixed(0)} kcal'),
+                            _buildTargetCard('Protéines', '${protGrams.toStringAsFixed(1)} g'),
                           ],
                         ),
-                        const SizedBox(height: 8),
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: const [
-                            Column(
-                              children: [
-                                Text('Poids actuel',
-                                    style: TextStyle(color: Colors.grey)),
-                                Text('70 kg',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                            Column(
-                              children: [
-                                Text('Poids cible',
-                                    style: TextStyle(color: Colors.grey)),
-                                Text('65 kg',
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold)),
-                              ],
-                            ),
+                          children: [
+                            _buildTargetCard('Lipides', '${lipGrams.toStringAsFixed(1)} g'),
+                            _buildTargetCard('Glucides', '${carbsGrams.toStringAsFixed(1)} g'),
                           ],
                         ),
                       ],
+                    );
+                  }),
+                  if (weeklyCaloriesTarget != null) ...[
+                    const SizedBox(height: 10),
+                    Center(
+                      child: Text(
+                        'Objectif hebdomadaire : ${weeklyCaloriesTarget.toStringAsFixed(0)} kcal',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  ElevatedButton.icon(
+                    onPressed: isLoadingMeal ? null : _optimizeMeal,
+                    icon: const Icon(Icons.restaurant),
+                    label: Text(isLoadingMeal
+                        ? 'Optimisation en cours...'
+                        : '🍽️ Optimiser le repas'),
+                  ),
+                  if (isLoadingMeal)
+                    const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                ],
+
+                if (mealPlan != null) ...[
+                  const SizedBox(height: 20),
+                  const Text(
+                    '🍲 Meal Plan',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
+                  ),
+                  const SizedBox(height: 8),
+                  Card(
+                    elevation: 3,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(mealPlan.toString()),
                     ),
                   ),
-                ),
+                ],
 
                 const SizedBox(height: 20),
-
-                /// Suivi hebdomadaire
                 const Text(
-                  'Suivi hebdomadaire',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
+                  '📈 Suivi hebdomadaire (poids)',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
                 ),
                 const SizedBox(height: 8),
                 Card(
                   elevation: 3,
                   child: SizedBox(
                     height: 200,
-                    child: const Center(child: Text('[Graphique ici]')),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Center(
-                  child: Text(
-                    'Objectif semaine : 14 000 kcal',
-                    style: TextStyle(color: Colors.black),
+                    child: weightHistory.isEmpty
+                        ? const Center(child: Text('Aucune donnée de poids'))
+                        : Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: LineChart(
+                        LineChartData(
+                          titlesData: FlTitlesData(
+                            leftTitles: AxisTitles(
+                              sideTitles: SideTitles(showTitles: true),
+                            ),
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(showTitles: true),
+                            ),
+                          ),
+                          lineBarsData: [
+                            LineChartBarData(
+                              spots: weightHistory
+                                  .asMap()
+                                  .entries
+                                  .map(
+                                    (e) => FlSpot(
+                                  e.key.toDouble(),
+                                  double.tryParse(
+                                    e.value['poids']?.toString() ??
+                                        e.value['weight']?.toString() ??
+                                        '0.0',
+                                  ) ?? 0.0,
+                                ),
+                              )
+                                  .toList(),
+                              isCurved: true,
+                              barWidth: 3,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
 
                 const SizedBox(height: 20),
-
-                /// Actions rapides
                 const Text(
-                  'Actions rapides',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
+                  '⚡ Actions rapides',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black),
                 ),
                 const SizedBox(height: 10),
-
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -226,17 +338,13 @@ class DashboardPage extends StatelessWidget {
                         onPressed: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(
-                                builder: (_) => const ProfilePage()),
-                          );
+                            MaterialPageRoute(builder: (_) => const ProfilePage()),
+                          ).then((_) => _loadData());
                         },
                         icon: const Icon(Icons.person, size: 16),
                         label: const FittedBox(
                           fit: BoxFit.scaleDown,
-                          child: Text(
-                            'Profil',
-                            style: TextStyle(fontSize: 12),
-                          ),
+                          child: Text('Profil', style: TextStyle(fontSize: 12)),
                         ),
                       ),
                     ),
@@ -246,23 +354,18 @@ class DashboardPage extends StatelessWidget {
                         onPressed: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(
-                                builder: (_) => const PreferencesPage()),
+                            MaterialPageRoute(builder: (_) => const PreferencesPage()),
                           );
                         },
                         icon: const Icon(Icons.settings, size: 16),
                         label: const FittedBox(
                           fit: BoxFit.scaleDown,
-                          child: Text(
-                            'Préférences',
-                            style: TextStyle(fontSize: 12),
-                          ),
+                          child: Text('Préférences', style: TextStyle(fontSize: 12)),
                         ),
                       ),
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 20),
               ],
             ),
