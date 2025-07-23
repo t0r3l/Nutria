@@ -233,9 +233,10 @@ def clean_categories(data: pl.LazyFrame) -> pl.LazyFrame:
                 "Gluten",
                 "Gluten pur",
                 "Inulin Pulver",
+                "Parole d'eleveurs!",
 
             ])),
-        ~(pl.col("product_name").str.to_lowercase().str.contains("gelatin|gélatine|powder|poudre|bcaa|bébé|bebe|Iso 100")),
+        ~(pl.col("product_name").str.to_lowercase().str.contains("gelatin|gélatine|powder|poudre|bcaa|bébé|bebe|iso 100|truvia|test|lingette")),
 
     )
 
@@ -243,7 +244,7 @@ def clean_categories(data: pl.LazyFrame) -> pl.LazyFrame:
 
 
 def add_tags(data: pl.LazyFrame) -> pl.LazyFrame:
-    return data.with_columns(
+    data_with_tags = data.with_columns(
         # Tags régimes alimentaires :
 
         pl.col("labels").str.contains("halal").alias("halal"),
@@ -258,8 +259,8 @@ def add_tags(data: pl.LazyFrame) -> pl.LazyFrame:
         pl.col("categories").str.contains("viandes|meat").alias("meat"),
         pl.col("categories").str.contains("pates|pasta").alias("pasta"),
         (
-                pl.col("categories").str.contains("boissons?,|drinks?|lait|infusion|thes?,|teas|beverage") |
-                pl.col("product_name").str.to_lowercase().str.contains(" drinks? |café|coffee")
+                (pl.col("categories").str.contains("boisson|drinks?|lait|infusion|thes?,|teas|beverage") & ~pl.col("categories").str.contains(r"aliments-et-boissons")) |
+                pl.col("product_name").str.to_lowercase().str.contains(" drinks? |café|coffee|shake")
         ).alias("drinks"),
         pl.col("categories").str.contains("produits-laitiers|lait|dairy").alias("lait"),
         pl.col("categories").str.contains("produits-de-la-mer|poisson|fish").alias("fish"),
@@ -280,8 +281,18 @@ def add_tags(data: pl.LazyFrame) -> pl.LazyFrame:
         pl.col("categories").str.contains("fromag").alias("cheese"),
         pl.col("categories").str.contains("oeuf|egg").alias("eggs"),
         (pl.col("categories").str.contains(
-            "keto|complements|supplements|whey|protein-powder|proteine|additif|edulcorant|additives|sweetener|bodybuilder|protein") | pl.col(
+            "keto|complements|supplements|whey|protein-powder|proteine|additif|edulcorant|eddulzant|additives|sweetener|bodybuilder|protein") | pl.col(
             "product_name").str.contains("whey|Whey|WHEY")).alias("complements"),
+    )
+
+    # filter unused data
+    return data_with_tags.filter(
+        pl.col("plats_prepares") == False,
+        pl.col("snacks") == False,
+        pl.col("desserts") == False,
+        pl.col("drinks") == False,
+        pl.col("condiments") == False,
+        pl.col("complements") == False
     )
 
 
@@ -307,10 +318,13 @@ def portion_maximale(data: pl.LazyFrame) -> pl.LazyFrame:
             .when((pl.col("fruits") == True) & (pl.col("drinks") == False)).then(150)
             .when(pl.col("matiere-grasses") == True).then(10)
             .when(pl.col("desserts") == True).then(60)
+            .when(pl.col("condiments") == True).then(5)
             .otherwise(100)
         ).alias("portion_maximale"),
         pl.when((pl.col("vegetables") == True) ).then(100).otherwise(0).alias("portion_legumes"),
     )
+
+    data = data.drop("serving_size")
 
     return data
 

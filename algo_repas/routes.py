@@ -1,3 +1,6 @@
+from operator import contains
+from typing import List
+
 from flask import Flask, request, jsonify
 import json
 import os
@@ -26,10 +29,33 @@ logger.info(f"Environment: {os.environ.get('ENVIRONMENT', 'unknown')}")
 logger.info(f"S3 Bucket: {os.environ.get('S3_BUCKET_NAME', 'unknown')}")
 logger.info(f"CSV File Key: {os.environ.get('CSV_FILE_KEY', 'unknown')}")
 
+def apply_categories(products: pl.DataFrame, regime: str):
+    filtered_products = products
 
-def create_optimal_meals_hybrid(user_targets, products_df, solveur="hybride", meal_fraction=0.3, portion_legumes=100):
+    match regime:
+        case "Vegan":
+            filtered_products = products.filter(pl.col("vegan") == True)
+        case "Vegetarian":
+            filtered_products = products.filter(pl.col("vegetarian") == True | (pl.col("meat") == False))
+        case "Halal":
+            filtered_products = products.filter(pl.col("halal") == True | (pl.col("vegetarian") == True))
+        case "Casher":
+            filtered_products = products.filter(pl.col("casher") == True)
+        case "Sans Gluten":
+            filtered_products = filtered_products.filter(pl.col("gluten_free") == True)
+        case "Bio":
+            filtered_products = filtered_products.filter(pl.col("bio") == True)
+
+    return filtered_products
+
+def create_optimal_meals_hybrid(user_targets, products_df, solveur="hybride", meal_fraction=0.3, portion_legumes=100,
+                                categories=None, regime:str= ""):
     """Hybrid meal optimization method"""
+    if categories is None:
+        categories = []
     try:
+
+        products_df = apply_categories(products_df, categories, regime)
         logger.info(f"Starting optimization with solver: {solveur}")
 
         # Apply meal fraction to targets
@@ -201,6 +227,8 @@ def optimize_meal():
         solveur = data.get('solveur', 'hybride')
         sample_size = data.get('sample_size', 1000)
         target_legumes = data.get('target_legumes', 100)
+        regime = data.get('regime', "")
+        categories = data.get('categories', [])
 
         logger.info(f"Request params: fraction={meal_fraction}, solver={solveur}, sample={sample_size}, legumes={target_legumes}")
 
@@ -242,6 +270,8 @@ def optimize_meal():
             "solver": solveur,
             "products_used": len(meal_plan),
             "target_legumes": target_legumes,
+            "regime": regime,
+            "categories": categories,
             "deployment_info": {
                 "type": "fargate",
                 "optimization_method": "hybrid",
