@@ -7,27 +7,28 @@ class UserStorage {
   static const _preferencesKey = 'preferences';
   static const _targetsKey = 'targets';
   static const _lastProfileKey = 'last_profile_key';
+  static const _mealLogKey = 'meal_logs';
 
-  /// 🔐 Enregistre le profil utilisateur
+  /// Enregistre le profil utilisateur
   static Future<void> saveSignup(Map<String, dynamic> data) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_signupKey, jsonEncode(data));
   }
 
-  /// 📥 Charge le profil utilisateur
+  /// Charge le profil utilisateur
   static Future<Map<String, dynamic>?> loadSignup() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonStr = prefs.getString(_signupKey);
     return jsonStr != null ? jsonDecode(jsonStr) : null;
   }
 
-  /// 📊 Enregistre l’historique des poids
+  /// Enregistre l’historique des poids
   static Future<void> saveWeightHistory(List<Map<String, dynamic>> history) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_weightHistoryKey, jsonEncode(history));
   }
 
-  /// 📊 Charge l’historique des poids
+  /// Charge l’historique des poids
   static Future<List<Map<String, dynamic>>?> loadWeightHistory() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonStr = prefs.getString(_weightHistoryKey);
@@ -38,20 +39,20 @@ class UserStorage {
     return null;
   }
 
-  /// ✅ Enregistre les préférences (régime + calorie_split)
+  /// Enregistre les préférences (régime + calorie_split)
   static Future<void> savePreferences(Map<String, dynamic> data) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_preferencesKey, jsonEncode(data));
   }
 
-  /// ✅ Charge les préférences (régime + calorie_split)
+  /// Charge les préférences (régime + calorie_split)
   static Future<Map<String, dynamic>?> loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonStr = prefs.getString(_preferencesKey);
     return jsonStr != null ? jsonDecode(jsonStr) : null;
   }
 
-  /// 🔢 Récupère le pourcentage de calories associé à un repas (ex: 'Déjeuner')
+  ///Récupère le pourcentage de calories associé à un repas (ex: 'Déjeuner')
   static Future<int> getCalorieSplitPercent(String momentRepas) async {
     final prefs = await loadPreferences();
     final split = prefs?['calorie_split'] ?? {};
@@ -67,13 +68,13 @@ class UserStorage {
     }
   }
 
-  /// 🎯 Enregistre les targets nutritionnels
+  /// Enregistre les targets nutritionnels
   static Future<void> saveTargets(List<dynamic> targets) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_targetsKey, jsonEncode(targets));
   }
 
-  /// 🎯 Charge les targets nutritionnels
+  /// Charge les targets nutritionnels
   static Future<List<dynamic>?> loadTargets() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonStr = prefs.getString(_targetsKey);
@@ -83,15 +84,63 @@ class UserStorage {
     return null;
   }
 
-  /// 🧬 Enregistre la clé du profil
+  /// Enregistre la clé du profil
   static Future<void> saveLastProfileKey(String profileKey) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_lastProfileKey, profileKey);
   }
 
-  /// 🧬 Charge la dernière clé du profil
+  /// Charge la dernière clé du profil
   static Future<String?> loadLastProfileKey() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_lastProfileKey);
   }
+
+  /// Enregistre un repas consommé (ajoute au journal)
+  static Future<void> logConsumedMeal(Map<String, dynamic> meal) async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<Map<String, dynamic>> logs = await loadConsumedMeals() ?? [];
+    logs.add(meal);
+    await prefs.setString(_mealLogKey, jsonEncode(logs));
+  }
+
+  /// Charge tous les repas consommés
+  static Future<List<Map<String, dynamic>>?> loadConsumedMeals() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = prefs.getString(_mealLogKey);
+    if (jsonStr != null) {
+      final List<dynamic> list = jsonDecode(jsonStr);
+      return list.map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+    return null;
+  }
+
+  /// 🧹 Supprime tout l'historique des repas (optionnel pour debug)
+  static Future<void> clearMealLogs() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_mealLogKey);
+  }
+
+  static Future<void> saveLastConsumedDate(String date) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('last_consumed_date', date);
+  }
+
+  static Future<String?> loadLastConsumedDate() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('last_consumed_date');
+  }
+
+  static Future<void> clearConsumedMeals() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('consumed_meals');
+  }
+
+  /// Réinitialise complètement toutes les données utilisateur
+  static Future<void> clearAllUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+  }
+
+
 }

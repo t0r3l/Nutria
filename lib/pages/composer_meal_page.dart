@@ -1,8 +1,7 @@
-// ✅ Nouvelle version de ComposerMealPage avec gestion de target_legumes et regime selon le moment du repas
+import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:nutria_project/pages/services/user_storage.dart';
 import 'package:nutria_project/pages/services/api_service.dart';
-import 'dart:developer';
 
 class ComposerMealPage extends StatefulWidget {
   const ComposerMealPage({super.key});
@@ -14,7 +13,6 @@ class ComposerMealPage extends StatefulWidget {
 class _ComposerMealPageState extends State<ComposerMealPage> {
   String? momentRepas = 'Déjeuner';
   bool repasGenere = false;
-  double progress = 0.6;
   Map<String, dynamic>? repasGenereData;
 
   Future<void> _generateMeal() async {
@@ -37,7 +35,6 @@ class _ComposerMealPageState extends State<ComposerMealPage> {
 
     final preferences = await UserStorage.loadPreferences();
     final String regime = preferences?['regime'] ?? 'sans régime';
-
     final portionMeal = allTargets.map((n) => n * (percent / 100)).toList();
     final int targetLegumes = momentRepas == 'Petit-déjeuner' ? 0 : 100;
 
@@ -55,6 +52,32 @@ class _ComposerMealPageState extends State<ComposerMealPage> {
       log('Erreur de génération du repas : $e');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Erreur lors de la génération du repas.')),
+      );
+    }
+  }
+
+  Future<void> _logMeal() async {
+    if (repasGenereData == null) return;
+
+    final verification = repasGenereData!['verification'] ?? {};
+    final mealPlan = repasGenereData!['meal_plan'] ?? [];
+
+    final data = {
+      'timestamp': DateTime.now().toIso8601String(),
+      'meal': mealPlan,
+      'macros': {
+        'calories': (verification['obtained']?[0] ?? 0).toDouble(),
+        'protein': (verification['obtained']?[1] ?? 0).toDouble(),
+        'lipid': (verification['obtained']?[2] ?? 0).toDouble(),
+        'glucide': (verification['obtained']?[3] ?? 0).toDouble(),
+      }
+    };
+
+    await UserStorage.logConsumedMeal(data);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Repas ajouté au suivi.')),
       );
     }
   }
@@ -84,7 +107,16 @@ class _ComposerMealPageState extends State<ComposerMealPage> {
             Text('Protéines : ${obtained[1].toStringAsFixed(1)} / ${targets[1].toStringAsFixed(1)} g'),
             Text('Glucides : ${obtained[2].toStringAsFixed(1)} / ${targets[2].toStringAsFixed(1)} g'),
             Text('Lipides : ${obtained[3].toStringAsFixed(1)} / ${targets[3].toStringAsFixed(1)} g'),
-            Text('Fibres : ${obtained[4].toStringAsFixed(1)} / ${targets[4].toStringAsFixed(1)} g'),
+            if (obtained.length > 4 && targets.length > 4)
+              Text('Fibres : ${obtained[4].toStringAsFixed(1)} / ${targets[4].toStringAsFixed(1)} g'),
+            const SizedBox(height: 12),
+            Center(
+              child: ElevatedButton.icon(
+                onPressed: _logMeal,
+                icon: const Icon(Icons.check),
+                label: const Text('Je consomme ce repas'),
+              ),
+            ),
           ],
         ),
       ),
@@ -102,10 +134,7 @@ class _ComposerMealPageState extends State<ComposerMealPage> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          Image.asset(
-            'assets/images/17.png',
-            fit: BoxFit.cover,
-          ),
+          Image.asset('assets/images/17.png', fit: BoxFit.cover),
           SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -113,48 +142,31 @@ class _ComposerMealPageState extends State<ComposerMealPage> {
               children: [
                 const SizedBox(height: kToolbarHeight + 20),
                 Center(
-                  child: Image.asset(
-                    'assets/images/ChatGPT Image 8 juil. 2025, 23_37_32.png',
-                    width: 100,
-                    height: 100,
-                  ),
+                  child: Image.asset('assets/images/ChatGPT Image 8 juil. 2025, 23_37_32.png', width: 100, height: 100),
                 ),
                 const SizedBox(height: 20),
-                const Text(
-                  '🍳 Compose ton repas parfait',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
-                ),
+                const Text('🍳 Compose ton repas parfait', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
                 const SizedBox(height: 8),
                 const Text(
                   'Nous générons un repas adapté à tes objectifs, tes préférences et ton budget calorique du jour.',
                   style: TextStyle(color: Colors.white),
                 ),
                 const SizedBox(height: 20),
-                Image.asset(
-                  'assets/images/14.png',
-                  width: double.infinity,
-                  height: 300,
-                  fit: BoxFit.cover,
-                ),
+                Image.asset('assets/images/14.png', width: double.infinity, height: 300, fit: BoxFit.cover),
                 const SizedBox(height: 20),
-                const Text(
-                  'Choisir le moment du repas',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-                ),
+                const Text('Choisir le moment du repas', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                 Column(
                   children: ['Petit-déjeuner', 'Déjeuner', 'Dîner']
-                      .map(
-                        (moment) => RadioListTile<String>(
-                      title: Text(moment, style: const TextStyle(color: Colors.white)),
-                      value: moment,
-                      groupValue: momentRepas,
-                      onChanged: (val) {
-                        setState(() {
-                          momentRepas = val;
-                        });
-                      },
-                    ),
-                  )
+                      .map((moment) => RadioListTile<String>(
+                    title: Text(moment, style: const TextStyle(color: Colors.white)),
+                    value: moment,
+                    groupValue: momentRepas,
+                    onChanged: (val) {
+                      setState(() {
+                        momentRepas = val;
+                      });
+                    },
+                  ))
                       .toList(),
                 ),
                 const SizedBox(height: 20),
@@ -168,10 +180,7 @@ class _ComposerMealPageState extends State<ComposerMealPage> {
                 const SizedBox(height: 20),
                 if (repasGenere && repasGenereData != null) ...[
                   const Divider(),
-                  const Text(
-                    '📋 Détails du repas',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
+                  const Text('📋 Détails du repas', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                   const SizedBox(height: 12),
                   buildMealCard(repasGenereData!),
                 ],

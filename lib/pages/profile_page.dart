@@ -60,9 +60,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> enregistrerProfil() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      isLoading = true;
-    });
+    setState(() => isLoading = true);
 
     final now = DateTime.now().toIso8601String().substring(0, 10);
     final poidsActuel = double.tryParse(_poidsCtrl.text) ?? 0.0;
@@ -97,20 +95,32 @@ class _ProfilePageState extends State<ProfilePage> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profil & targets mis à jour ✨')),
+        const SnackBar(content: Text('✅ Profil et targets mis à jour !')),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur lors du calcul des targets: \$e')),
+        SnackBar(content: Text('❌ Erreur lors du calcul des targets : $e')),
       );
     }
 
-    setState(() {
-      isLoading = false;
-    });
+    setState(() => isLoading = false);
   }
 
-  void _deleteEntry(int index) async {
+  Future<void> resetAllData() async {
+    await UserStorage.saveSignup({});
+    await UserStorage.saveWeightHistory([]);
+    await UserStorage.clearMealLogs();
+    await UserStorage.savePreferences({});
+    await UserStorage.saveTargets([]);
+    await UserStorage.saveLastProfileKey('');
+    await UserStorage.saveLastConsumedDate('');
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('🧹 Toutes les données ont été réinitialisées')),
+    );
+    _loadUserData(); // Recharge interface vide
+  }
+
+  Future<void> _deleteEntry(int index) async {
     historiquePoids.removeAt(index);
     await UserStorage.saveWeightHistory(historiquePoids);
     setState(() {});
@@ -198,7 +208,8 @@ class _ProfilePageState extends State<ProfilePage> {
                 decoration:
                 const InputDecoration(labelText: 'Niveau d’activité'),
                 items: activityLevels
-                    .map((lvl) => DropdownMenuItem(value: lvl, child: Text(lvl)))
+                    .map((lvl) =>
+                    DropdownMenuItem(value: lvl, child: Text(lvl)))
                     .toList(),
                 onChanged: (val) => setState(() => activityLevel = val!),
               ),
@@ -207,7 +218,8 @@ class _ProfilePageState extends State<ProfilePage> {
                 value: objectif,
                 decoration: const InputDecoration(labelText: 'Objectif'),
                 items: objectifs
-                    .map((obj) => DropdownMenuItem(value: obj, child: Text(obj)))
+                    .map((obj) =>
+                    DropdownMenuItem(value: obj, child: Text(obj)))
                     .toList(),
                 onChanged: (val) => setState(() => objectif = val!),
               ),
@@ -216,9 +228,23 @@ class _ProfilePageState extends State<ProfilePage> {
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.save),
                   label: isLoading
-                      ? const CircularProgressIndicator()
+                      ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2))
                       : const Text('Enregistrer les modifications'),
                   onPressed: isLoading ? null : enregistrerProfil,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Center(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.delete_forever, color: Colors.red),
+                  label: const Text(
+                    'Réinitialiser toutes les données',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  onPressed: resetAllData,
                 ),
               ),
               const SizedBox(height: 20),
@@ -260,10 +286,4 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
     );
   }
-}
-
-void _deleteEntry(int index) async {
-  final history = await UserStorage.loadWeightHistory() ?? [];
-  history.removeAt(index);
-  await UserStorage.saveWeightHistory(history);
 }
