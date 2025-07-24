@@ -1,4 +1,4 @@
-# Ultra-lightweight Fargate image using Alpine
+# Ultra-lightweight Fargate image for app3.py using Alpine
 FROM python:3.11-alpine as builder
 
 # Set build environment
@@ -19,8 +19,8 @@ RUN apk add --no-cache \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install Python packages
-COPY requirements.optimized.txt /tmp/requirements.txt
+# Install Python packages (use optimized requirements)
+COPY fargate/requirements.optimized.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r /tmp/requirements.txt \
     && find /opt/venv -name "*.pyc" -delete \
@@ -36,7 +36,8 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PATH="/opt/venv/bin:$PATH"
 ENV PORT=8080
-ENV FLASK_APP=app.py
+ENV FLASK_APP=app3.py
+ENV ENVIRONMENT=production
 
 # Install minimal runtime dependencies
 RUN apk add --no-cache \
@@ -53,7 +54,7 @@ WORKDIR /app
 RUN adduser -D -u 1000 appuser && chown -R appuser:appuser /app
 
 # Copy application
-COPY --chown=appuser:appuser app.py .
+COPY --chown=appuser:appuser app3.py .
 
 # Switch to non-root user
 USER appuser
@@ -66,4 +67,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
 # Run with gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "4", "--timeout", "60", "--preload", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "4", "--timeout", "60", "--preload", "app3:app"]
