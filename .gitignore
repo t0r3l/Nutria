@@ -1,1 +1,61 @@
-data_prep/data/
+# Terraform
+terraform/terraform.tfstate
+terraform/terraform.tfstate.*
+terraform/.terraform/
+.terraform/
+terraform/*.tfplan
+*.tfplan
+.terraform.lock.hcl
+.terraform.tfstate.lock.info
+
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+myenv/
+venv/
+env/
+ENV/
+
+# Generated files
+layers/*.zip
+builds/*.zip
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# AWS
+.aws/
+root_key
+terraform.tfvars
+
+# Logs
+*.log
+
+# Data files (keep sample, ignore large files)
+data_prep/data/*.csv
+!data_prep/data/products_names_with_macro_nutriments(in).csv
