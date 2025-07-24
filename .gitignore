@@ -2,7 +2,11 @@
 terraform/terraform.tfstate
 terraform/terraform.tfstate.*
 terraform/.terraform/
+.terraform/
 terraform/*.tfplan
+*.tfplan
+.terraform.lock.hcl
+.terraform.tfstate.lock.info
 
 
 # Python
