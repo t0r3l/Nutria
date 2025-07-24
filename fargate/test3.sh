@@ -9,4 +9,4 @@ curl -X POST http://34.245.111.159:8080/optimize \
     "sample_size": 500,
     "target_legumes": 100,
     "regime": "Vegan"
-  }'
+  }'ùm 
