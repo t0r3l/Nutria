@@ -50,6 +50,8 @@ builds/*.zip
 
 # AWS
 .aws/
+root_key
+terraform.tfvars
 
 # Logs
 *.log
