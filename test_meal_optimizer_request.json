@@ -1,8 +1,0 @@
-{
-  "user": {
-    "target_array": [2000, 600, 80, 200]
-  },
-  "meal_fraction": 0.3,
-  "solveur": "hybride",
-  "sample_size": 1000
-}
